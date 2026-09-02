@@ -1,5 +1,6 @@
 import { loadConfig } from "./config.js";
 import { PostgresStore } from "./db/postgres-store.js";
+import { SqliteStore } from "./db/sqlite-store.js";
 import { Logger } from "./logger.js";
 import { ConsoleNotifier, TelegramNotifier } from "./notifier.js";
 import { RadarPipeline, type RunOptions } from "./pipeline.js";
@@ -10,7 +11,11 @@ import { valuePerMile } from "./pricing.js";
 
 const config = loadConfig();
 const logger = new Logger(config.LOG_LEVEL);
-const store = config.DATABASE_URL ? new PostgresStore(config.DATABASE_URL) : new MemoryStore();
+const store = config.DATABASE_URL
+  ? new PostgresStore(config.DATABASE_URL)
+  : config.EPHEMERAL_STORE.toLowerCase() === "true"
+    ? new MemoryStore()
+    : new SqliteStore(config.SQLITE_PATH);
 const notifier = config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_CHAT_ID
   ? new TelegramNotifier(config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID)
   : new ConsoleNotifier();
@@ -48,7 +53,9 @@ if (command === "miles") {
   console.error(`Unknown command: ${command}\nAvailable: ${Object.keys(modes).join(", ")}`);
   process.exitCode = 2;
 } else {
-  if (!config.DATABASE_URL) logger.warn("DATABASE_URL is missing; running with ephemeral in-memory storage");
+  if (!config.DATABASE_URL && config.EPHEMERAL_STORE.toLowerCase() !== "true") {
+    logger.info("Using local SQLite persistence", { path: config.SQLITE_PATH });
+  }
   await store.init();
   try {
     await pipeline.run(command, options);

@@ -12,8 +12,8 @@
     "test": "vitest run",
     "test:browser": "RUN_BROWSER_TESTS=true vitest run src/sources/browser.test.ts",
     "test:watch": "vitest",
-    "radar": "node --enable-source-maps dist/cli.js",
-    "db:migrate": "node --enable-source-maps dist/db/migrate.js"
+    "radar": "node --disable-warning=ExperimentalWarning --enable-source-maps dist/cli.js",
+    "db:migrate": "node --disable-warning=ExperimentalWarning --enable-source-maps dist/db/migrate.js"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

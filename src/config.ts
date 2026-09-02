@@ -1,12 +1,19 @@
 import { z } from "zod";
 import type { RadarPreferences } from "./domain.js";
 
+const optionalNonEmptyString = z.preprocess(
+  (value) => typeof value === "string" && value.trim() === "" ? undefined : value,
+  z.string().min(1).optional()
+);
+
 const envSchema = z.object({
-  DATABASE_URL: z.string().min(1).optional(),
-  TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
-  TELEGRAM_CHAT_ID: z.string().min(1).optional(),
-  AMADEUS_API_KEY: z.string().min(1).optional(),
-  AMADEUS_API_SECRET: z.string().min(1).optional(),
+  DATABASE_URL: optionalNonEmptyString,
+  SQLITE_PATH: z.string().min(1).default("data/radar.sqlite"),
+  EPHEMERAL_STORE: z.string().default("false"),
+  TELEGRAM_BOT_TOKEN: optionalNonEmptyString,
+  TELEGRAM_CHAT_ID: optionalNonEmptyString,
+  AMADEUS_API_KEY: optionalNonEmptyString,
+  AMADEUS_API_SECRET: optionalNonEmptyString,
   AMADEUS_BASE_URL: z.string().url().default("https://api.amadeus.com"),
   AMADEUS_MONTHLY_CAP: z.coerce.number().int().min(0).default(0),
   AMADEUS_CAP_SAFETY_PERCENT: z.coerce.number().int().min(1).max(100).default(80),

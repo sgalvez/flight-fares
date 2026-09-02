@@ -13,13 +13,13 @@ Radar personal de tarifas para los próximos 60 días. Prioriza LATAM, compara u
 - Detección relativa de ofertas con percentil 20 durante el arranque y mediana histórica después de 21 observaciones.
 - Viajes completos de 2, 3 o 4 noches, incluso mezclando aerolíneas.
 - Escaneo de promociones públicas compatible con banco/producto y LATAM Pass.
-- Historial PostgreSQL, deduplicación de 24 horas y retención de 400 días.
+- Historial SQLite local por defecto (PostgreSQL opcional), deduplicación de 24 horas y retención de 400 días.
 - Telegram, ejecución manual y dos horarios automáticos en GitHub Actions.
 - Ninguna compra automática, sesión personal, tarjeta o credencial de aerolínea.
 
 ## Puesta en marcha local
 
-Requisitos: Node.js 22 y una base PostgreSQL, por ejemplo el plan gratuito de Neon.
+Requisito: Node.js 22. El modo predeterminado usa un archivo SQLite local y no necesita Neon ni otro servicio de base de datos.
 
 ```bash
 npm install
@@ -33,7 +33,7 @@ npm run radar -- run
 
 Cuando Chromium esté instalado, `npm run test:browser` valida el parser de navegador contra una página local de prueba. La suite normal omite esta prueba porque algunos sandboxes no permiten iniciar Chromium.
 
-Node no carga `.env` automáticamente. Para desarrollo se puede ejecutar con `node --env-file=.env`, exportar las variables en la terminal o usar el gestor de secretos del entorno. Sin `DATABASE_URL`, el CLI funciona en memoria para diagnóstico, pero pierde el historial al terminar.
+Node no carga `.env` automáticamente. Para desarrollo se puede ejecutar el JavaScript compilado con `node --env-file=.env dist/cli.js run`, exportar las variables en la terminal o usar el gestor de secretos del entorno. Sin `DATABASE_URL`, el CLI conserva automáticamente el historial en `data/radar.sqlite`. `EPHEMERAL_STORE=true` habilita explícitamente el modo temporal para diagnóstico.
 
 Comandos disponibles:
 
@@ -50,10 +50,9 @@ npm run radar -- miles 50000 4000 10000  # calcula CLP efectivos por milla
 
 ## Configuración obligatoria
 
-1. Crear una base gratuita en Neon y guardar su conexión como `DATABASE_URL`.
-2. Crear un bot con BotFather, iniciar una conversación con él y guardar `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID`.
-3. Crear una aplicación Amadeus, moverla a producción y copiar su cuota gratuita visible en el workspace a `AMADEUS_MONTHLY_CAP`.
-4. No habilitar facturación automática en Amadeus. El radar detiene llamadas cuando su contador local alcanza 80% de la cuota configurada.
+1. Crear un bot con BotFather, iniciar una conversación con él y guardar `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID`.
+2. Crear una aplicación Amadeus, moverla a producción y copiar su cuota gratuita visible en el workspace a `AMADEUS_MONTHLY_CAP`.
+3. No habilitar facturación automática en Amadeus. El radar detiene llamadas cuando su contador local alcanza 80% de la cuota configurada.
 
 El entorno de prueba de Amadeus contiene datos limitados. Para observaciones reales debe usarse `https://api.amadeus.com`, aunque sus precios sigan siendo señales estimadas hasta verificarlos en la aerolínea.
 
@@ -87,15 +86,20 @@ Una promoción potencial se muestra separada del precio. Solo debe descontarse d
 
 ## GitHub Actions
 
+El workflow usa SQLite y restaura `data/radar.sqlite` desde el caché privado de GitHub Actions al comenzar; al terminar correctamente guarda una nueva versión. La concurrencia está serializada para que dos ejecuciones no escriban simultáneamente.
+
+Este almacenamiento no tiene costo ni requiere credenciales adicionales, pero el caché de Actions es recuperable solo bajo las políticas de retención de GitHub y no sustituye un backup permanente. Para máxima autonomía, ejecutar el mismo proyecto con cron o systemd en un computador, NAS, Raspberry Pi o servidor propio mantiene el archivo SQLite íntegramente bajo tu control.
+
 Guardar como secretos:
 
-- `DATABASE_URL`
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
 - `AMADEUS_API_KEY`
 - `AMADEUS_API_SECRET`
 - `BROWSER_SOURCES_JSON`
 - `BANK_PRODUCTS`
+
+`DATABASE_URL` es opcional. Si se configura, PostgreSQL/Neon toma precedencia sobre SQLite.
 
 Guardar como variables no sensibles:
 
@@ -125,6 +129,7 @@ La distribución objetivo es: fechas a 14 días dos veces al día, 15–30 cada 
 ## Seguridad operativa
 
 - Todos los secretos provienen del entorno y están excluidos de Git.
+- El archivo SQLite y sus archivos WAL están excluidos de Git; en Actions se almacenan únicamente en el caché privado del repositorio.
 - Los errores y resúmenes no incluyen cuerpos completos de proveedores ni tokens.
 - El repositorio puede ser privado; GitHub Free incluye minutos mensuales suficientes para el volumen esperado, pero se debe activar un presupuesto con corte en cero.
-- Revisar mensualmente cuota de APIs, minutos de Actions, tamaño de Neon y salud de selectores.
+- Revisar mensualmente cuota de APIs, minutos de Actions, tamaño/backup de SQLite y salud de selectores.
