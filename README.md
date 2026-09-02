@@ -1,6 +1,6 @@
 # Radar de vuelos SCL ↔ IQQ
 
-Radar personal de tarifas para los próximos 60 días. Prioriza LATAM, compara una maleta de cabina, combina viajes de 2–4 noches y envía oportunidades verificadas y un resumen diario a Telegram.
+Radar personal de tarifas para los próximos 60 días. Prioriza LATAM, compara una maleta de cabina, combina viajes de 2–4 noches, envía alertas por Telegram y publica una vista estática sanitizada.
 
 ## Qué está implementado
 
@@ -14,7 +14,7 @@ Radar personal de tarifas para los próximos 60 días. Prioriza LATAM, compara u
 - Viajes completos de 2, 3 o 4 noches, incluso mezclando aerolíneas.
 - Escaneo de promociones públicas compatible con banco/producto y LATAM Pass.
 - Historial SQLite local por defecto (PostgreSQL opcional), deduplicación de 24 horas y retención de 400 días.
-- Telegram, ejecución manual y dos horarios automáticos en GitHub Actions.
+- Telegram, dashboard móvil y tres horarios automáticos en GitHub Actions.
 - Ninguna compra automática, sesión personal, tarjeta o credencial de aerolínea.
 
 ## Puesta en marcha local
@@ -29,6 +29,7 @@ npm run build
 npm run db:migrate
 npm test
 npm run radar -- run
+npm run dashboard:export -- dashboard-output/data/latest.json
 ```
 
 Cuando Chromium esté instalado, `npm run test:browser` valida el parser de navegador contra una página local de prueba. La suite normal omite esta prueba porque algunos sandboxes no permiten iniciar Chromium.
@@ -39,6 +40,8 @@ Comandos disponibles:
 
 ```bash
 npm run radar -- discover  # Amadeus, sujeto a cuota
+npm run radar -- morning   # descubrimiento, verificación y alertas
+npm run radar -- midday    # verificación y alertas
 npm run radar -- verify    # páginas oficiales configuradas
 npm run radar -- digest    # promociones, alertas y resumen
 npm run radar -- run       # ciclo completo
@@ -88,7 +91,7 @@ Una promoción potencial se muestra separada del precio. Solo debe descontarse d
 
 El workflow usa SQLite y restaura `data/radar.sqlite` desde el caché privado de GitHub Actions al comenzar; al terminar correctamente guarda una nueva versión. La concurrencia está serializada para que dos ejecuciones no escriban simultáneamente.
 
-Este almacenamiento no tiene costo ni requiere credenciales adicionales, pero el caché de Actions es recuperable solo bajo las políticas de retención de GitHub y no sustituye un backup permanente. Para máxima autonomía, ejecutar el mismo proyecto con cron o systemd en un computador, NAS, Raspberry Pi o servidor propio mantiene el archivo SQLite íntegramente bajo tu control.
+Este almacenamiento no tiene costo ni requiere credenciales adicionales, pero el caché de Actions es recuperable solo bajo las políticas de retención de GitHub. La ejecución nocturna conserva además una copia privada por siete días. Para máxima autonomía, ejecutar el mismo proyecto con systemd en un computador, NAS, Raspberry Pi o servidor propio mantiene SQLite íntegramente bajo tu control.
 
 Guardar como secretos:
 
@@ -98,6 +101,7 @@ Guardar como secretos:
 - `AMADEUS_API_SECRET`
 - `BROWSER_SOURCES_JSON`
 - `BANK_PRODUCTS`
+- `DASHBOARD_DEPLOY_KEY`
 
 `DATABASE_URL` es opcional. Si se configura, PostgreSQL/Neon toma precedencia sobre SQLite.
 
@@ -107,8 +111,35 @@ Guardar como variables no sensibles:
 - `PROMOTION_URLS_JSON`
 - `LATAM_PASS_TIER`
 - `LATAM_PASS_CLUB`
+- `DASHBOARD_PUBLISH_ENABLED`
 
-El workflow ejecuta descubrimiento a las 07:17 y verificación, promociones y resumen a las 19:43, hora de Santiago. También admite ejecución manual. GitHub puede retrasar tareas programadas; la base conserva la hora de cada corrida para evidenciar esos saltos.
+`DASHBOARD_DEPLOY_KEY` es una clave SSH de escritura registrada exclusivamente en `sgalvez/flight-fares-dashboard`; su mitad privada vive como secreto en este repositorio. No concede acceso al motor privado ni a otros proyectos.
+
+Mantener `DASHBOARD_PUBLISH_ENABLED=false` hasta instalar la deploy key y luego cambiarlo a `true`. Con la variable desactivada, el radar y Telegram siguen funcionando y únicamente se omite la publicación.
+
+El workflow ejecuta descubrimiento y verificación a las 07:17, otra verificación a las 13:37 y verificación, promociones y resumen a las 19:43, hora de Santiago. Solo la corrida matinal consume Amadeus. Cada ejecución admite hasta ocho comprobaciones web, alterna las dos rutas y evita repetir una fuente/ruta/fecha durante ocho horas.
+
+Las pruebas están separadas en `.github/workflows/ci.yml` y se ejecutan cuando cambia el código, no en cada búsqueda programada. GitHub puede retrasar tareas programadas; la base conserva la hora de cada corrida para evidenciar esos saltos.
+
+## Dashboard público
+
+El motor permanece en este repositorio privado. Después de cada corrida genera `DashboardSnapshotV1` y copia únicamente ese JSON junto con los archivos de `dashboard/` al repositorio público [`sgalvez/flight-fares-dashboard`](https://github.com/sgalvez/flight-fares-dashboard). GitHub Pages publica desde `main`, carpeta `/docs`, en <https://sgalvez.github.io/flight-fares-dashboard/>.
+
+La interfaz muestra mejores tramos, viajes de 2–4 noches, horizonte de 60 días, filtros LATAM/verificados y frescura de la captura. El snapshot excluye productos bancarios, preferencias LATAM Pass, promociones personalizadas, estado de APIs, errores, fingerprints y cualquier secreto. Los enlaces se restringen a dominios oficiales conocidos.
+
+Si la publicación falla, el sitio conserva el snapshot anterior. La corrida, SQLite y Telegram no dependen de Pages.
+
+## Migración opcional a Raspberry Pi
+
+Las unidades de `deploy/raspberry/` quedan deliberadamente desactivadas. Para usarlas:
+
+1. Instalar Node.js 22 en un sistema de 64 bits, configurar la zona `America/Santiago` y compilar el proyecto en `/opt/flight-fares`.
+2. Crear el usuario sin login `flight-radar`, `/var/lib/flight-radar/site/data` y `/var/lib/flight-radar/screenshots`; copiar los archivos estáticos de `dashboard/` a `/var/lib/flight-radar/site`.
+3. Guardar las variables en `/etc/flight-radar.env`, legible solo por root, y copiar la unidad y los tres timers a `/etc/systemd/system`.
+4. Descargar el respaldo SQLite privado más reciente a `/var/lib/flight-radar/radar.sqlite`.
+5. Desactivar primero los horarios de GitHub Actions y luego habilitar los timers. Nunca mantener ambos planificadores activos con las mismas credenciales.
+
+El sitio generado puede servirse en la red privada o mediante Tailscale. La unidad usa un usuario dedicado, filesystem protegido y solo permite escribir en `/var/lib/flight-radar`.
 
 ## Interpretación de alertas
 
@@ -130,6 +161,7 @@ La distribución objetivo es: fechas a 14 días dos veces al día, 15–30 cada 
 
 - Todos los secretos provienen del entorno y están excluidos de Git.
 - El archivo SQLite y sus archivos WAL están excluidos de Git; en Actions se almacenan únicamente en el caché privado del repositorio.
+- El snapshot público tiene un esquema explícito y no contiene beneficios personales ni estado operativo.
 - Los errores y resúmenes no incluyen cuerpos completos de proveedores ni tokens.
 - El repositorio puede ser privado; GitHub Free incluye minutos mensuales suficientes para el volumen esperado, pero se debe activar un presupuesto con corte en cero.
 - Revisar mensualmente cuota de APIs, minutos de Actions, tamaño/backup de SQLite y salud de selectores.

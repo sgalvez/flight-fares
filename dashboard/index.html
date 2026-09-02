@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Radar SCL ↔ IQQ</title>
+  <meta name="description" content="Radar personal de tarifas comparables entre Santiago e Iquique.">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <header class="hero">
+    <div class="shell hero__inner">
+      <div>
+        <p class="eyebrow">RADAR DE TARIFAS</p>
+        <h1>Santiago <span aria-hidden="true">↔</span> Iquique</h1>
+        <p class="intro">Precios comparables con maleta de cabina para los próximos 60 días.</p>
+      </div>
+      <div class="update-card" aria-live="polite">
+        <span class="status-dot" id="status-dot"></span>
+        <div>
+          <span class="update-card__label">Última actualización</span>
+          <strong id="updated-at">Cargando…</strong>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <div id="notice" class="notice" role="status" hidden></div>
+
+    <section aria-labelledby="best-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">VISTA RÁPIDA</p>
+          <h2 id="best-title">Mejores tramos</h2>
+        </div>
+        <p class="muted" id="horizon"></p>
+      </div>
+      <div id="best-routes" class="route-grid"></div>
+    </section>
+
+    <section aria-labelledby="trips-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">IDA Y REGRESO</p>
+          <h2 id="trips-title">Viajes de 2–4 noches</h2>
+        </div>
+      </div>
+      <div id="trips" class="trip-grid"></div>
+    </section>
+
+    <section aria-labelledby="calendar-title">
+      <div class="section-heading section-heading--filters">
+        <div>
+          <p class="eyebrow">HORIZONTE MÓVIL</p>
+          <h2 id="calendar-title">Alternativas por fecha</h2>
+        </div>
+        <div class="filters" aria-label="Filtros de resultados">
+          <label>Ruta
+            <select id="route-filter">
+              <option value="all">Ambas</option>
+              <option value="SCL-IQQ">SCL → IQQ</option>
+              <option value="IQQ-SCL">IQQ → SCL</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="latam-filter"> Solo LATAM</label>
+          <label class="check"><input type="checkbox" id="verified-filter"> Solo verificados</label>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Fecha</th><th>Ruta</th><th>Vuelo</th><th>Horario</th><th>Señal</th><th>Precio comparable</th><th></th></tr></thead>
+          <tbody id="offers"></tbody>
+        </table>
+      </div>
+      <p id="offers-empty" class="empty" hidden>No hay alternativas que coincidan con estos filtros.</p>
+    </section>
+
+    <footer>
+      <p>Los valores son observaciones, no reservas. Confirma equipaje, condiciones y precio final antes de pagar.</p>
+      <p>Este radar personal no está asociado con LATAM, SKY, JetSMART ni sus proveedores.</p>
+    </footer>
+  </main>
+</body>
+</html>

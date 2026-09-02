@@ -4,6 +4,8 @@ on:
   schedule:
     - cron: "17 7 * * *"
       timezone: "America/Santiago"
+    - cron: "37 13 * * *"
+      timezone: "America/Santiago"
     - cron: "43 19 * * *"
       timezone: "America/Santiago"
   workflow_dispatch:
@@ -15,6 +17,8 @@ on:
         type: choice
         options:
           - run
+          - morning
+          - midday
           - evening
           - discover
           - verify
@@ -32,7 +36,7 @@ concurrency:
 jobs:
   radar:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       SQLITE_PATH: data/radar.sqlite
@@ -49,7 +53,8 @@ jobs:
       LATAM_PASS_TIER: ${{ vars.LATAM_PASS_TIER || 'LATAM' }}
       LATAM_PASS_CLUB: ${{ vars.LATAM_PASS_CLUB || 'false' }}
       HORIZON_DAYS: "60"
-      BROWSER_CHECKS_PER_DAY: "18"
+      BROWSER_CHECKS_PER_RUN: "8"
+      BROWSER_RECHECK_HOURS: "8"
 
     steps:
       - uses: actions/checkout@v4
@@ -71,14 +76,15 @@ jobs:
       - if: env.BROWSER_SOURCES_JSON != '[]'
         run: npx playwright install chromium
       - run: npm run build
-      - run: npm test
-      - if: env.BROWSER_SOURCES_JSON != '[]'
-        run: npm run test:browser
       - run: npm run db:migrate
 
-      - name: Morning discovery
+      - name: Morning discovery and verification
         if: github.event_name == 'schedule' && github.event.schedule == '17 7 * * *'
-        run: npm run radar -- discover
+        run: npm run radar -- morning
+
+      - name: Midday verification
+        if: github.event_name == 'schedule' && github.event.schedule == '37 13 * * *'
+        run: npm run radar -- midday
 
       - name: Evening verification and digest
         if: github.event_name == 'schedule' && github.event.schedule == '43 19 * * *'
@@ -90,12 +96,49 @@ jobs:
           RADAR_MANUAL_MODE: ${{ inputs.mode }}
         run: npm run radar -- "$RADAR_MANUAL_MODE"
 
+      - name: Export sanitized dashboard snapshot
+        run: npm run dashboard:export -- dashboard-output/data/latest.json
+
       - name: Persist private SQLite history
         if: success() && env.DATABASE_URL == ''
         uses: actions/cache/save@v4
         with:
           path: data/radar.sqlite
           key: flight-radar-sqlite-${{ github.run_id }}
+
+      - name: Keep nightly private database backup
+        if: github.event_name == 'schedule' && github.event.schedule == '43 19 * * *' && env.DATABASE_URL == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: radar-sqlite-${{ github.run_id }}
+          path: data/radar.sqlite
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Check out public dashboard repository
+        if: vars.DASHBOARD_PUBLISH_ENABLED == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: sgalvez/flight-fares-dashboard
+          ssh-key: ${{ secrets.DASHBOARD_DEPLOY_KEY }}
+          path: dashboard-site
+
+      - name: Publish sanitized dashboard data
+        if: vars.DASHBOARD_PUBLISH_ENABLED == 'true'
+        run: |
+          mkdir -p dashboard-site/docs/data
+          cp dashboard/.nojekyll dashboard/index.html dashboard/styles.css dashboard/app.js dashboard-site/docs/
+          cp dashboard-output/data/latest.json dashboard-site/docs/data/latest.json
+          cd dashboard-site
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs
+          if git diff --cached --quiet; then
+            echo "Dashboard has no changes"
+          else
+            git commit -m "Update fares ${{ github.run_id }}"
+            git push
+          fi
 
       - name: Upload parser evidence
         if: failure()

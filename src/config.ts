@@ -27,7 +27,8 @@ const envSchema = z.object({
   LATAM_PASS_CLUB: z.string().default("false"),
   RADAR_TIMEZONE: z.string().default("America/Santiago"),
   HORIZON_DAYS: z.coerce.number().int().min(1).max(365).default(60),
-  BROWSER_CHECKS_PER_DAY: z.coerce.number().int().min(0).max(100).default(18),
+  BROWSER_CHECKS_PER_RUN: z.coerce.number().int().min(0).max(50).default(8),
+  BROWSER_RECHECK_HOURS: z.coerce.number().int().min(1).max(72).default(8),
   SCREENSHOT_DIR: z.string().default("screenshots"),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info")
 });

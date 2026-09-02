@@ -109,31 +109,53 @@ export class RadarPipeline {
   }
 
   private async verify(dates: string[]): Promise<number> {
-    const { config, store, browsers } = this.dependencies;
+    const { config, store, browsers, logger } = this.dependencies;
     const enabledBrowsers = browsers.filter((source) => source.isEnabled());
-    if (enabledBrowsers.length === 0 || config.BROWSER_CHECKS_PER_DAY === 0) return 0;
+    if (enabledBrowsers.length === 0 || config.BROWSER_CHECKS_PER_RUN === 0) return 0;
     const latest = await store.getLatestOffers(dates[0]!, dates.at(-1)!);
-    const candidates = new Map<string, string[]>();
+    const queues: Array<Array<{ source: FlightSource; route: RadarConfig["preferences"]["routes"][number]; departureDate: string; score: number }>> = [];
+    const recentThreshold = this.now().getTime() - config.BROWSER_RECHECK_HOURS * 3_600_000;
     for (const route of config.preferences.routes) {
       const routeOffers = latest.filter((offer) => offer.origin === route.origin && offer.destination === route.destination)
         .sort((a, b) => a.comparablePriceClp - b.comparablePriceClp);
       const top = routeOffers[0]?.departureDate;
-      const rotating = chooseRotatingDates(dates, 2, this.now());
-      candidates.set(`${route.origin}-${route.destination}`, [...new Set([...(top ? [top] : []), ...rotating])]);
+      const candidateDates = [...new Set([...(top ? [top] : []), ...chooseRotatingDates(dates, 6, this.now())])];
+      const tasks = candidateDates.flatMap((departureDate) => enabledBrowsers.map((source) => {
+        const previous = latest.filter((offer) =>
+          offer.source === source.name && offer.origin === route.origin && offer.destination === route.destination &&
+          offer.departureDate === departureDate
+        ).sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))[0];
+        const previousTime = previous ? new Date(previous.capturedAt).getTime() : 0;
+        return {
+          source,
+          route,
+          departureDate,
+          recent: previousTime >= recentThreshold,
+          score: (departureDate === top ? 40 : 0) + (source.carrier === "LA" ? 25 : 0) + Math.min(20, Math.floor((this.now().getTime() - previousTime) / 3_600_000))
+        };
+      })).filter((task) => !task.recent)
+        .sort((a, b) => b.score - a.score || a.departureDate.localeCompare(b.departureDate));
+      queues.push(tasks.map(({ recent: _recent, ...task }) => task));
     }
-    let checks = 0;
-    let saved = 0;
-    for (const route of config.preferences.routes) {
-      for (const departureDate of candidates.get(`${route.origin}-${route.destination}`) ?? []) {
-        for (const browser of enabledBrowsers) {
-          if (checks >= config.BROWSER_CHECKS_PER_DAY) return saved;
-          checks += 1;
-          const offers = await this.runSource(browser, { route, departureDate, adults: 1, directOnly: true });
-          await store.saveOffers(offers);
-          saved += offers.length;
-        }
+
+    const selected: Array<{ source: FlightSource; route: RadarConfig["preferences"]["routes"][number]; departureDate: string }> = [];
+    while (selected.length < config.BROWSER_CHECKS_PER_RUN && queues.some((queue) => queue.length > 0)) {
+      for (const queue of queues) {
+        const task = queue.shift();
+        if (task) selected.push(task);
+        if (selected.length >= config.BROWSER_CHECKS_PER_RUN) break;
       }
     }
+
+    let checks = 0;
+    let saved = 0;
+    for (const task of selected) {
+      checks += 1;
+      const offers = await this.runSource(task.source, { route: task.route, departureDate: task.departureDate, adults: 1, directOnly: true });
+      await store.saveOffers(offers);
+      saved += offers.length;
+    }
+    logger.info("Browser verification pass complete", { checks, saved });
     return saved;
   }
 

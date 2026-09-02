@@ -9,4 +9,5 @@ screenshots/
 data/*.sqlite
 data/*.sqlite-shm
 data/*.sqlite-wal
+dashboard-output/
 *.log

@@ -1,0 +1,20 @@
+[Unit]
+Description=Flight fare radar (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=flight-radar
+Group=flight-radar
+WorkingDirectory=/opt/flight-fares
+EnvironmentFile=/etc/flight-radar.env
+Environment=SQLITE_PATH=/var/lib/flight-radar/radar.sqlite
+Environment=SCREENSHOT_DIR=/var/lib/flight-radar/screenshots
+ExecStart=/usr/bin/npm run radar -- %i
+ExecStart=/usr/bin/npm run dashboard:export -- /var/lib/flight-radar/site/data/latest.json
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/flight-radar

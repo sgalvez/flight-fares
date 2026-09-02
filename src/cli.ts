@@ -30,6 +30,8 @@ const pipeline = new RadarPipeline({ config, store, amadeus, browsers, notifier,
 
 const modes: Record<string, RunOptions> = {
   run: { discover: true, verify: true, promotions: true, alerts: true, digest: true },
+  morning: { discover: true, verify: true, promotions: false, alerts: true, digest: false },
+  midday: { discover: false, verify: true, promotions: false, alerts: true, digest: false },
   evening: { discover: false, verify: true, promotions: true, alerts: true, digest: true },
   discover: { discover: true, verify: false, promotions: false, alerts: true, digest: false },
   verify: { discover: false, verify: true, promotions: false, alerts: true, digest: false },

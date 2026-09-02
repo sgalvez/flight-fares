@@ -1,0 +1,11 @@
+[Unit]
+Description=Midday flight fare radar
+
+[Timer]
+OnCalendar=*-*-* 13:37:00
+Persistent=true
+RandomizedDelaySec=120
+Unit=flight-radar@midday.service
+
+[Install]
+WantedBy=timers.target
