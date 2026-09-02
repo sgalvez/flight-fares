@@ -1,0 +1,91 @@
+name: Flight radar
+
+on:
+  schedule:
+    - cron: "17 7 * * *"
+      timezone: "America/Santiago"
+    - cron: "43 19 * * *"
+      timezone: "America/Santiago"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Radar command
+        required: true
+        default: run
+        type: choice
+        options:
+          - run
+          - evening
+          - discover
+          - verify
+          - digest
+          - health
+          - backfill
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flight-radar
+  cancel-in-progress: false
+
+jobs:
+  radar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      AMADEUS_API_KEY: ${{ secrets.AMADEUS_API_KEY }}
+      AMADEUS_API_SECRET: ${{ secrets.AMADEUS_API_SECRET }}
+      AMADEUS_BASE_URL: https://api.amadeus.com
+      AMADEUS_MONTHLY_CAP: ${{ vars.AMADEUS_MONTHLY_CAP || '0' }}
+      AMADEUS_CAP_SAFETY_PERCENT: "80"
+      BROWSER_SOURCES_JSON: ${{ secrets.BROWSER_SOURCES_JSON || '[]' }}
+      PROMOTION_URLS_JSON: ${{ vars.PROMOTION_URLS_JSON || '[]' }}
+      BANK_PRODUCTS: ${{ secrets.BANK_PRODUCTS || '' }}
+      LATAM_PASS_TIER: ${{ vars.LATAM_PASS_TIER || 'LATAM' }}
+      LATAM_PASS_CLUB: ${{ vars.LATAM_PASS_CLUB || 'false' }}
+      HORIZON_DAYS: "60"
+      BROWSER_CHECKS_PER_DAY: "18"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - if: env.BROWSER_SOURCES_JSON != '[]'
+        run: npx playwright install chromium
+      - run: npm run build
+      - run: npm test
+      - if: env.BROWSER_SOURCES_JSON != '[]'
+        run: npm run test:browser
+      - run: npm run db:migrate
+
+      - name: Morning discovery
+        if: github.event_name == 'schedule' && github.event.schedule == '17 7 * * *'
+        run: npm run radar -- discover
+
+      - name: Evening verification and digest
+        if: github.event_name == 'schedule' && github.event.schedule == '43 19 * * *'
+        run: npm run radar -- evening
+
+      - name: Manual command
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RADAR_MANUAL_MODE: ${{ inputs.mode }}
+        run: npm run radar -- "$RADAR_MANUAL_MODE"
+
+      - name: Upload parser evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radar-screenshots-${{ github.run_id }}
+          path: screenshots/
+          if-no-files-found: ignore
+          retention-days: 7

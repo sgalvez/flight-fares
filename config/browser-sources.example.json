@@ -1,0 +1,33 @@
+[
+  {
+    "name": "latam-public-booking",
+    "carrier": "LA",
+    "urlTemplate": "https://PUBLIC-LATAM-SEARCH-URL?origin={origin}&destination={destination}&date={date}&adults={adults}",
+    "priceSelector": "[data-testid='lowest-price']",
+    "flightNumberSelector": "[data-testid='flight-number']",
+    "departureTimeSelector": "[data-testid='departure-time']",
+    "arrivalTimeSelector": "[data-testid='arrival-time']",
+    "fareFamilySelector": "[data-testid='fare-family']",
+    "cabinBagIncluded": true,
+    "waitForSelector": "[data-testid='flight-card']",
+    "enabled": false
+  },
+  {
+    "name": "sky-public-booking",
+    "carrier": "H2",
+    "urlTemplate": "https://PUBLIC-SKY-SEARCH-URL?origin={origin}&destination={destination}&date={date}&adults={adults}",
+    "priceSelector": "[data-testid='lowest-price']",
+    "cabinBagIncluded": false,
+    "cabinBagFeeClp": 20000,
+    "enabled": false
+  },
+  {
+    "name": "jetsmart-public-booking",
+    "carrier": "JA",
+    "urlTemplate": "https://PUBLIC-JETSMART-SEARCH-URL?origin={origin}&destination={destination}&date={date}&adults={adults}",
+    "priceSelector": "[data-testid='lowest-price']",
+    "cabinBagIncluded": false,
+    "cabinBagFeeClp": 20000,
+    "enabled": false
+  }
+]
