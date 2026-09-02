@@ -57,15 +57,15 @@ jobs:
       BROWSER_RECHECK_HOURS: "8"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
 
       - name: Restore private SQLite history
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: data/radar.sqlite
           key: flight-radar-sqlite-${{ github.run_id }}
@@ -101,14 +101,14 @@ jobs:
 
       - name: Persist private SQLite history
         if: success() && env.DATABASE_URL == ''
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: data/radar.sqlite
           key: flight-radar-sqlite-${{ github.run_id }}
 
       - name: Keep nightly private database backup
         if: github.event_name == 'schedule' && github.event.schedule == '43 19 * * *' && env.DATABASE_URL == ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: radar-sqlite-${{ github.run_id }}
           path: data/radar.sqlite
@@ -117,7 +117,7 @@ jobs:
 
       - name: Check out public dashboard repository
         if: vars.DASHBOARD_PUBLISH_ENABLED == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: sgalvez/flight-fares-dashboard
           ssh-key: ${{ secrets.DASHBOARD_DEPLOY_KEY }}
@@ -142,7 +142,7 @@ jobs:
 
       - name: Upload parser evidence
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: radar-screenshots-${{ github.run_id }}
           path: screenshots/
